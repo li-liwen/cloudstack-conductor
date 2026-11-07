@@ -337,6 +337,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
 
             async with connect(
                 endpoint,
+                subprotocols=["binary"],  # type: ignore[list-item]
                 max_size=websocket.app.state.settings.console.max_message_bytes,
                 open_timeout=15,
                 close_timeout=5,

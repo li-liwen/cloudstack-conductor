@@ -29,6 +29,43 @@ from conductor.models.enums import ConsoleLeaseState
 from conductor.security.crypto import Vault, console_aad, new_launch_token, token_hash
 
 
+def native_console_websocket_url(url: str) -> str:
+    """Derive the noVNC WebSocket endpoint from CloudStack's console page URL.
+
+    CloudStack returns an HTML page such as
+    ``/resource/noVNC/vnc.html?port=8080&token=...``. The noVNC client opens a
+    WebSocket at ``ws://host:port/websockify?token=...`` (the page's ``path``
+    query parameter overrides ``websockify``). The HTML URL itself is not a
+    WebSocket endpoint.
+    """
+
+    parsed = urllib.parse.urlsplit(url)
+    # A literal ``+`` in a CloudStack token is usually not form-encoded; keep it.
+    params = urllib.parse.parse_qs(parsed.query.replace("+", "%2B"), keep_blank_values=True)
+    token = params.get("token", [""])[0]
+    if not token:
+        raise CapabilityUnsupported("the console endpoint had no token")
+    host = params.get("host", [parsed.hostname])[0]
+    if not host:
+        raise CapabilityUnsupported("the console endpoint has no host")
+    try:
+        page_port = parsed.port or (443 if parsed.scheme in {"https", "wss"} else 80)
+        port = int(params.get("port", [str(page_port)])[0])
+    except (TypeError, ValueError) as exc:
+        raise CapabilityUnsupported("the console endpoint port was invalid") from exc
+    path = params.get("path", ["websockify"])[0].strip("/") or "websockify"
+    # CloudStack's noVNC page resolves the default relative path to
+    # ``/websockify/websockify`` on the console proxy. An explicit ``path``
+    # query parameter is used verbatim.
+    if "path" not in params and path == "websockify":
+        path = "websockify/websockify"
+    encrypted = str(params.get("encrypt", ["0"])[0]).lower() in {"1", "true", "yes"}
+    scheme = "wss" if parsed.scheme in {"https", "wss"} or encrypted else "ws"
+    # CloudStack's websockify expects the raw base64 token; percent-encoding
+    # it causes the proxy to reject the token as an illegal base64 character.
+    return f"{scheme}://{host}:{port}/{path}?token={token}"
+
+
 def _validate_console_url(url: str, settings: Settings) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in {"https", "wss"}:
@@ -73,6 +110,8 @@ class ConsoleBroker:
         async with access.client() as client:
             endpoint = await client.create_console_endpoint(vm.id)
         _validate_console_url(endpoint.url, self.settings)
+        websocket_url = native_console_websocket_url(endpoint.url)
+        _validate_console_url(websocket_url, self.settings)
         now = utcnow()
         lease_id = new_id("lease")
         token = new_launch_token()
@@ -91,7 +130,7 @@ class ConsoleBroker:
             launch_token_hash=token_hash(token),
             session_id=session_id,
         )
-        ciphertext = self.vault.encrypt(endpoint.url, aad=console_aad(lease_id))
+        ciphertext = self.vault.encrypt(websocket_url, aad=console_aad(lease_id))
         await self.leases.create(
             lease,
             endpoint_ciphertext=ciphertext,

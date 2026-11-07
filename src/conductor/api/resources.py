@@ -163,7 +163,8 @@ async def console_ws(websocket: WebSocket, session_id: str) -> None:
     except AuthenticationError:
         await websocket.close(code=4401)
         return
-    await websocket.accept()
+    requested = websocket.scope.get("subprotocols") or []
+    await websocket.accept(subprotocol="binary" if "binary" in requested else None)
     try:
         from websockets.asyncio.client import connect
 
