@@ -54,6 +54,7 @@ describe("runtime configuration and branding", () => {
     );
 
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    await waitFor(() => expect(document.title).toBe("Example Cloud Conductor"));
     expect(screen.getByTestId("product")).toHaveTextContent("Example Cloud Conductor");
     expect(screen.getByTestId("company")).toHaveTextContent("Example Cloud");
     expect(screen.getByTestId("logo")).toHaveTextContent("/branding/logo.svg");
