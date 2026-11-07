@@ -6,18 +6,19 @@ import pytest
 from pydantic import ValidationError
 
 from conductor.errors import ApprovalExpired, AuthorizationError, PlanChanged, ValidationFailure
-from conductor.models.enums import ActionType, ApprovalRequirement, GuestTaskType
+from conductor.models.enums import ActionType, ApprovalRequirement, GuestTaskType, PrincipalRole
 from conductor.models.plan import ActionPlan, Approval
 from conductor.models.principal import Principal
 from conductor.policy.actions import (
     CreateNetworkParams,
+    DeleteInstanceParams,
     FirewallRuleSpec,
     GuestTaskParams,
     RegisterSshKeyParams,
     approval_requirement,
     validate_params,
 )
-from conductor.policy.authorization import ensure_account_context, ensure_approval
+from conductor.policy.authorization import ensure_account_context, ensure_approval, ensure_expunge_allowed
 
 
 def test_approval_matrix_matches_the_disclosed_policy() -> None:
@@ -164,3 +165,27 @@ def test_account_context_is_limited() -> None:
         ensure_account_context(principal, "account-2")
     delegated = principal.model_copy(update={"delegated_account_ids": ["account-2"]})
     ensure_account_context(delegated, "account-2")
+
+
+def test_only_operators_may_request_expunge() -> None:
+    principal = Principal(
+        subject="s",
+        username="u",
+        cloud_id="cloud",
+        cloudstack_user_id="user",
+        cloudstack_account_id="account-1",
+        cloudstack_domain_id="domain",
+        cloudstack_domain="ROOT",
+        cloudstack_username="u",
+        account="account",
+        roles=[PrincipalRole.USER],
+    )
+    ensure_expunge_allowed(DeleteInstanceParams(instance_id="11111111-1111-4111-8111-111111111111"), principal)
+    with pytest.raises(AuthorizationError):
+        ensure_expunge_allowed(
+            DeleteInstanceParams(instance_id="11111111-1111-4111-8111-111111111111", expunge=True), principal
+        )
+    operator = principal.model_copy(update={"roles": [PrincipalRole.OPERATOR]})
+    ensure_expunge_allowed(
+        DeleteInstanceParams(instance_id="11111111-1111-4111-8111-111111111111", expunge=True), operator
+    )

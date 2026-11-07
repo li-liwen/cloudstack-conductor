@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from conductor.errors import ApprovalExpired, AuthorizationError, PlanChanged
-from conductor.models.enums import ActionType, ApprovalRequirement, Scope
+from conductor.models.enums import ActionType, ApprovalRequirement, PrincipalRole, Scope
 from conductor.models.plan import ActionPlan, Approval
 from conductor.models.principal import Principal
 from conductor.policy.actions import approval_requirement, get_spec
@@ -98,3 +98,15 @@ def can_view_plan(principal: Principal, plan: ActionPlan) -> bool:
 
 def can_view_operation(principal: Principal, operation_subject: str) -> bool:
     return principal.is_operator or operation_subject == principal.subject
+
+
+def ensure_expunge_allowed(params: object, principal: Principal) -> None:
+    """Only operators may request irreversible CloudStack expunge.
+
+    Tenants can destroy an instance (recoverable until expunged) but CloudStack
+    itself denies account-level expunge. Reject it before a plan is prepared so
+    users never approve an operation that the cloud will refuse.
+    """
+
+    if getattr(params, "expunge", False) and PrincipalRole.OPERATOR not in principal.roles:
+        raise AuthorizationError("only an operator may expunge an instance")

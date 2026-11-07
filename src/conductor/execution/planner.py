@@ -60,7 +60,11 @@ from conductor.policy.actions import (
     approval_requirement,
     get_spec,
 )
-from conductor.policy.authorization import ensure_account_context, ensure_action_allowed
+from conductor.policy.authorization import (
+    ensure_account_context,
+    ensure_action_allowed,
+    ensure_expunge_allowed,
+)
 from conductor.pricing.estimates import quote_summary
 from conductor.security.crypto import Vault
 
@@ -520,6 +524,7 @@ class Planner:
         account_id: str,
         principal: Principal,
     ) -> Draft:
+        ensure_expunge_allowed(params, principal)
         vm = await self._vm(access, params.instance_id)
         async with access.client() as client:
             volumes = await client.list_volumes(account_id=access.account_param(account_id))

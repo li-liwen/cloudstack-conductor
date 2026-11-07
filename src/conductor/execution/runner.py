@@ -37,7 +37,7 @@ from conductor.models.principal import Principal
 from conductor.policy.actions import (
     get_spec,
 )
-from conductor.policy.authorization import ensure_approval
+from conductor.policy.authorization import ensure_approval, ensure_expunge_allowed
 from conductor.security.crypto import Vault
 
 logger = logging.getLogger(__name__)
@@ -318,6 +318,7 @@ class OperationRunner:
         }
 
     async def _run_delete_instance(self, session, op_repo, op, plan, params, access, client):
+        ensure_expunge_allowed(params, access.principal)
         vm = await client.get_virtual_machine(params.instance_id)
         await self._check_cancel(session, op)
         await client.destroy_virtual_machine(vm.id, expunge=params.expunge)
