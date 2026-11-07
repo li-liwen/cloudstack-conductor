@@ -18,13 +18,13 @@ trap 'rm -rf "$TMPDIR"' EXIT
 
 BASE="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}"
 echo "Downloading Gitleaks ${VERSION} (${PLATFORM})..." >&2
-curl -fsSL --retry 3 --retry-delay 2 -o "$TMPDIR/gitleaks.tar.gz" "${BASE}/gitleaks_${VERSION}_${PLATFORM}.tar.gz"
+curl -fsSL --retry 3 --retry-delay 2 -o "$TMPDIR/gitleaks_${VERSION}_${PLATFORM}.tar.gz" "${BASE}/gitleaks_${VERSION}_${PLATFORM}.tar.gz"
 curl -fsSL --retry 3 --retry-delay 2 -o "$TMPDIR/checksums.txt" "${BASE}/gitleaks_${VERSION}_checksums.txt"
 (
   cd "$TMPDIR"
   grep "gitleaks_${VERSION}_${PLATFORM}.tar.gz" checksums.txt > selected.txt
   sha256sum -c selected.txt
 )
-tar -xzf "$TMPDIR/gitleaks.tar.gz" -C "$TMPDIR" gitleaks
+tar -xzf "$TMPDIR/gitleaks_${VERSION}_${PLATFORM}.tar.gz" -C "$TMPDIR" gitleaks
 install -m 0755 "$TMPDIR/gitleaks" "$DESTINATION/gitleaks"
 "$DESTINATION/gitleaks" version
