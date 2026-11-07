@@ -15,7 +15,7 @@ from conductor.security.crypto import (
     credential_aad,
     token_hash,
 )
-from conductor.security.oidc import mfa_satisfied
+from conductor.security.oidc import mfa_satisfied, same_issuer
 from conductor.security.principal import PrincipalService
 from conductor.security.rate_limit import InMemoryRateLimiter
 from conductor.security.sessions import CSRF, OIDCFlow, OIDCFlowCodec, SessionCodec
@@ -180,3 +180,10 @@ def test_branding_rejects_unknown_and_external_assets(tmp_path) -> None:
     path.write_text('{"product_name": "Example", "primary_color": "#0D5EF4"}', encoding="utf-8")
     branding = load_branding(path)
     assert branding.product_name == "Example"
+
+
+def test_oidc_issuer_comparison_tolerates_trailing_slash() -> None:
+    assert same_issuer("https://auth.example.com/application/o/demo/", "https://auth.example.com/application/o/demo")
+    assert not same_issuer(
+        "https://auth.example.com/application/o/other/", "https://auth.example.com/application/o/demo"
+    )

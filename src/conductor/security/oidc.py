@@ -35,6 +35,12 @@ class DiscoveryDocument:
     id_token_signing_alg_values_supported: tuple[str, ...] = ("RS256",)
 
 
+def same_issuer(left: object, right: object) -> bool:
+    """Compare issuers while tolerating a trailing slash difference."""
+
+    return str(left or "").rstrip("/") == str(right or "").rstrip("/")
+
+
 class OIDCProvider:
     def __init__(self, settings: Settings) -> None:
         if not settings.auth.oidc_issuer:
@@ -151,15 +157,19 @@ class OIDCProvider:
                 signing_key.key,
                 algorithms=algorithms,
                 audience=self.settings.auth.oidc_client_id,
-                issuer=document.issuer,
                 options={
                     "require": ["exp", "iat", "iss", "aud", "sub"],
                     "verify_aud": True,
-                    "verify_iss": True,
+                    # Compare the issuer below after normalizing a trailing
+                    # slash; Authentik emits one in ``iss`` while discovery
+                    # metadata and configuration may omit it.
+                    "verify_iss": False,
                 },
             )
         except jwt.PyJWTError as exc:
             raise AuthenticationError("the identity token is not valid") from exc
+        if not same_issuer(claims.get("iss"), document.issuer):
+            raise AuthenticationError("the identity token issuer is not valid")
         if claims.get("azp") and claims["azp"] != self.settings.auth.oidc_client_id:
             raise AuthenticationError("the identity token was issued for another client")
         if nonce is not None and claims.get("nonce") != nonce:
