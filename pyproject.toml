@@ -80,6 +80,7 @@ minversion = "8.0"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 markers = [
   "integration: tests that need a database or running services",

@@ -685,6 +685,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--require-denylist", action="store_true")
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--fail-on-warning", action="store_true")
+    parser.add_argument(
+        "--public-ci",
+        action="store_true",
+        help="Run the generic public checks without requiring the private denylist.",
+    )
     parser.add_argument("--version", action="store_true")
     args = parser.parse_args(argv)
     if args.version:
