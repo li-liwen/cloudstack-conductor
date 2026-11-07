@@ -54,7 +54,7 @@ demo-logs: ## Follow demo stack logs
 	docker compose -f deploy/compose/compose.demo.yml logs -f --tail=100
 
 build-portal: ## Build the public portal bundle
-	cd apps/portal && pnpm install --frozen-lockfile && pnpm build
+	cd apps/portal && npm ci && npm run build
 
 clean: ## Remove local caches and build outputs
 	rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage dist build
