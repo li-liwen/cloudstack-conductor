@@ -92,6 +92,14 @@ Use MCP Inspector or another OAuth-capable client for testing. The client must
 support discovery, PKCE, dynamic registration (or a pre-registered client), and
 a browser consent step.
 
+## TLS requirement
+
+FastMCP's authorization-server implementation rejects an HTTP issuer at route
+construction (`Issuer URL must be HTTPS`). Terminate TLS in front of both the
+MCP public URL and the OIDC issuer, and configure the issuer to that HTTPS URL.
+A test deployment may use a private CA, but every MCP client must trust it.
+Do not disable certificate verification or expose OAuth over plain HTTP.
+
 ## Configuration
 
 Set `CONDUCTOR_MCP_PUBLIC_URL`, `CONDUCTOR_MCP_SIGNING_KEY_FILE`,

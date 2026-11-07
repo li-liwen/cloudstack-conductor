@@ -66,7 +66,10 @@ The typed action catalogue is in `src/conductor/policy/actions.py`:
   restore-to-new-volume;
 - isolated network creation/deletion and firewall rule changes;
 - SSH public-key registration;
-- console launch through the broker;
+- console launch through the broker. CloudStack returns a noVNC HTML page, not
+  the WebSocket endpoint. The broker derives the native noVNC WebSocket target,
+  keeps the native token server-side, and relays with the `binary` subprotocol;
+  the edge/reverse proxy must support that long-lived WebSocket;
 - managed guest tasks behind an isolated executor (disabled by default).
 
 Not automated in v1:
