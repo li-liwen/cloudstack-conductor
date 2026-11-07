@@ -193,3 +193,26 @@ async def test_usage_records_parse_dates_and_quantities() -> None:
         records = await client.list_usage_records(datetime(2026, 11, 1, tzinfo=UTC), datetime(2026, 11, 2, tzinfo=UTC))
     assert records[0].usageid == "usage-1"
     assert records[0].startdate == datetime(2026, 11, 1, tzinfo=UTC)
+
+
+@respx.mock
+async def test_capabilities_accept_nested_capability_object() -> None:
+    respx.get(API).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "listcapabilitiesresponse": {
+                    "capability": {
+                        "cloudstackversion": "4.22.1.1",
+                        "dynamicrolesenabled": True,
+                        "kvmsnapshotenabled": False,
+                    }
+                }
+            },
+        )
+    )
+    async with _client() as client:
+        capabilities = await client.get_capabilities()
+    assert capabilities.cloudstackversion == "4.22.1.1"
+    assert capabilities.dynamicrolesenabled is True
+    assert capabilities.kvmsnapshotenabled is False
