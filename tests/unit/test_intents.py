@@ -81,3 +81,9 @@ def test_fractional_memory_and_offering_name_are_parsed() -> None:
     )
     assert parsed.offering_hint == "Small Instance"
     assert parsed.name_hint == "pilot-created"
+
+
+def test_resource_phrase_supplies_instance_name() -> None:
+    parsed = parse("删除云主机 agent-created", default_locale="zh-CN")
+    assert parsed.action is ActionType.DELETE_INSTANCE
+    assert parsed.name_hint == "agent-created"

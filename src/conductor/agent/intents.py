@@ -202,6 +202,13 @@ def _name_phrase(text: str) -> str | None:
         text,
         re.IGNORECASE,
     )
+    if match:
+        return match.group(1)
+    match = re.search(
+        r"(?:云主机|实例|虚拟机|instance|vm)\s*(?:名称|名字)?\s*[：:]?\s*([A-Za-z0-9][A-Za-z0-9._-]{0,62})",
+        text,
+        re.IGNORECASE,
+    )
     return match.group(1) if match else None
 
 
