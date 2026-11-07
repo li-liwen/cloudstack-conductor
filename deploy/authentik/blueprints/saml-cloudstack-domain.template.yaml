@@ -1,0 +1,58 @@
+# Authentik blueprint template: one SAML provider per CloudStack domain.
+#
+# Copy this file privately once per domain and replace every <PLACEHOLDER>.
+# Each provider MUST have a unique entity ID and MUST be restricted to users
+# mapped to that exact CloudStack domain. Do not reuse a provider across
+# domains: CloudStack resolves users by username plus IdP entity ID.
+version: 1
+metadata:
+  name: conductor-cloudstack-saml-<DOMAIN_SLUG>
+  labels:
+    blueprints.goauthentik.io/description: CloudStack SAML provider for domain <DOMAIN_SLUG>
+entries:
+  - model: authentik_providers_saml.samlpropertymapping
+    id: conductor-saml-uid-<DOMAIN_SLUG>
+    identifiers:
+      name: conductor-saml-uid-<DOMAIN_SLUG>
+    attrs:
+      name: conductor-saml-uid-<DOMAIN_SLUG>
+      # CloudStack's SAML user identifier. Use the original CloudStack username,
+      # not email and not a merged display name.
+      expression: |
+        return {
+            "uid": request.user.username,
+            "username": request.user.username,
+            "email": request.user.email,
+            "name": request.user.name,
+        }
+  - model: authentik_providers_saml.samlprovider
+    id: conductor-cloudstack-saml-provider-<DOMAIN_SLUG>
+    identifiers:
+      name: conductor-cloudstack-<DOMAIN_SLUG>
+    attrs:
+      name: conductor-cloudstack-<DOMAIN_SLUG>
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # Unique per domain. Example: https://auth.example.com/saml/cloudstack-<DOMAIN_SLUG>/
+      issuer: !Env [CONDUCTOR_SAML_ISSUER_<DOMAIN_ENV>, ""]
+      # CloudStack global SAML ACS endpoint.
+      acs_url: !Env [CONDUCTOR_SAML_ACS_URL, "https://cloud.example.com/client/saml/2.0/ACS"]
+      sp_binding: redirect
+      property_mappings:
+        - !KeyOf conductor-saml-uid-<DOMAIN_SLUG>
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      digest_algorithm: http://www.w3.org/2001/04/xmlenc#sha256
+      signature_algorithm: http://www.w3.org/2001/04/xmldsig-more#rsa-sha256
+      assertion_validity: minutes=5
+      # Optional IdP-initiated flow. Leave false unless the deployment's threat
+      # model and CloudStack version explicitly support it.
+      allow_idp_initiated: false
+  - model: authentik_core.application
+    id: conductor-cloudstack-app-<DOMAIN_SLUG>
+    identifiers:
+      slug: cloudstack-<DOMAIN_SLUG>
+    attrs:
+      name: CloudStack <DOMAIN_SLUG>
+      provider: !KeyOf conductor-cloudstack-saml-provider-<DOMAIN_SLUG>
+      meta_launch_url: !Env [CONDUCTOR_CLOUDSTACK_UI_URL, "https://cloud.example.com"]
+      policy_engine_mode: any

@@ -1,0 +1,43 @@
+# Authentik blueprint: Open WebUI OIDC client (generic template).
+#
+# Open WebUI is optional. Keep local signup and email/password login disabled in
+# its environment; this provider is the only interactive login.
+version: 1
+metadata:
+  name: conductor-openwebui-oidc
+  labels:
+    blueprints.goauthentik.io/description: Open WebUI OIDC client
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: conductor-openwebui-provider
+    identifiers:
+      name: conductor-openwebui
+    attrs:
+      name: conductor-openwebui
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: confidential
+      client_id: !Env [CONDUCTOR_OPENWEBUI_OIDC_CLIENT_ID, ""]
+      client_secret: !Env [CONDUCTOR_OPENWEBUI_OIDC_CLIENT_SECRET, ""]
+      redirect_uris:
+        - matching_mode: strict
+          url: !Env [CONDUCTOR_OPENWEBUI_OIDC_REDIRECT_URI, "https://chat.example.com/oauth/oidc/callback"]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [name, "openid"]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, "email"]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, "profile"]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      include_claims_in_id_token: true
+      sub_mode: hashed_user_id
+      issuer_mode: per_provider
+      access_token_validity: hours=1
+      refresh_token_validity: days=30
+  - model: authentik_core.application
+    id: conductor-openwebui-app
+    identifiers:
+      slug: conductor-openwebui
+    attrs:
+      name: Conductor Chat
+      provider: !KeyOf conductor-openwebui-provider
+      meta_launch_url: !Env [CONDUCTOR_OPENWEBUI_PUBLIC_URL, "https://chat.example.com"]
+      policy_engine_mode: any

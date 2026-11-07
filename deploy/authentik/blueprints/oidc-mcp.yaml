@@ -1,0 +1,44 @@
+# Authentik blueprint: MCP OIDC client for the portal's MCP connection page.
+#
+# OIDCProxy performs dynamic client registration for external MCP clients. This
+# static client is used for first-party diagnostics and for deployments that
+# pre-register clients. Keep the redirect URI exact.
+version: 1
+metadata:
+  name: conductor-mcp-oidc
+  labels:
+    blueprints.goauthentik.io/description: MCP OIDC client for CloudStack Conductor
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: conductor-mcp-provider
+    identifiers:
+      name: conductor-mcp
+    attrs:
+      name: conductor-mcp
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: confidential
+      client_id: !Env [CONDUCTOR_MCP_OIDC_CLIENT_ID, ""]
+      client_secret: !Env [CONDUCTOR_MCP_OIDC_CLIENT_SECRET, ""]
+      redirect_uris:
+        - matching_mode: strict
+          url: !Env [CONDUCTOR_MCP_OIDC_REDIRECT_URI, "https://mcp.example.com/auth/callback"]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [name, "openid"]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, "email"]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, "profile"]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      include_claims_in_id_token: true
+      sub_mode: hashed_user_id
+      issuer_mode: per_provider
+      access_token_validity: minutes=10
+      refresh_token_validity: days=7
+  - model: authentik_core.application
+    id: conductor-mcp-app
+    identifiers:
+      slug: conductor-mcp
+    attrs:
+      name: Conductor MCP
+      provider: !KeyOf conductor-mcp-provider
+      meta_launch_url: !Env [CONDUCTOR_MCP_PUBLIC_URL, "https://mcp.example.com"]
+      policy_engine_mode: any

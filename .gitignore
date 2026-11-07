@@ -1,0 +1,77 @@
+# --- Credentials and private configuration ---------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+private/
+deploy/private/
+*.jks
+*.p12
+
+# --- Operator state, evidence, exports -------------------------------------
+state/
+data/
+runtime/
+evidence/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+*.har
+*.pcap
+*.trace
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.qcow2
+*.img
+*.iso
+
+# --- Documents that must come from the private workspace -------------------
+*.xlsx
+*.xlsm
+*.xls
+*.docx
+*.pptx
+*.pdf
+
+# --- Python ----------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.tox/
+
+# --- Node / frontend -------------------------------------------------------
+node_modules/
+apps/portal/dist/
+apps/portal/.vite/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Editors / OS ----------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Local publication manifests and scanner reports (private by design) ---
+publication-manifest*.json
+scanner-report*.json

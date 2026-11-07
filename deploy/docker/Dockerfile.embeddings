@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1.7
+# Embedding worker image. It is deliberately separate from the API image:
+# sentence-transformers and the model runtime are large and only this service
+# needs them.
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_NO_CACHE=1
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
+
+RUN groupadd --gid 10001 conductor \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin conductor \
+    && mkdir -p /app/.cache \
+    && chown -R conductor:conductor /app
+
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --extra embeddings --no-install-project
+
+COPY src ./src
+RUN uv sync --frozen --no-dev --extra embeddings \
+    && chown -R conductor:conductor /app
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    HF_HOME=/app/.cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
+
+USER conductor
+EXPOSE 8085
+CMD ["conductor-embeddings"]

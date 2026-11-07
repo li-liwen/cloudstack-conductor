@@ -1,0 +1,221 @@
+# Production Compose template. Every value is a private placeholder supplied
+# through an env file outside the repository. Do not commit a resolved file.
+#
+# Start with:
+#   docker compose --env-file /srv/conductor/env -f compose.prod.yml up -d --no-build
+#
+# Images are built privately from a clean export and referenced by commit tag
+# or digest. GitHub availability is not required to restart an existing release.
+
+name: cloudstack-conductor
+
+x-app: &app
+  image: ${CONDUCTOR_IMAGE:?set CONDUCTOR_IMAGE to the tested release image}
+  pull_policy: never
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - backend
+
+x-app-env: &app-env
+  CONDUCTOR_ENVIRONMENT: production
+  CONDUCTOR_CLOUD_ID: ${CONDUCTOR_CLOUD_ID:?set CONDUCTOR_CLOUD_ID}
+  CONDUCTOR_PUBLIC_BASE_URL: ${CONDUCTOR_PUBLIC_BASE_URL:?set CONDUCTOR_PUBLIC_BASE_URL}
+  CONDUCTOR_API_BASE_URL: http://api:8000
+  CONDUCTOR_EXECUTION_BASE_URL: http://execution:8001
+  CONDUCTOR_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  CONDUCTOR_DATABASE__POOL_SIZE: "10"
+  CONDUCTOR_INTERNAL_TOKEN_FILE: /run/secrets/internal_token
+  CONDUCTOR_VAULT_KEY_FILE: /run/secrets/vault_key
+  CONDUCTOR_AUTH__MODE: oidc
+  CONDUCTOR_AUTH__ALLOW_DEMO_AUTH: "false"
+  CONDUCTOR_AUTH__SECURE_COOKIES: "true"
+  CONDUCTOR_AUTH__OIDC_ISSUER: ${OIDC_ISSUER:?set OIDC_ISSUER}
+  CONDUCTOR_AUTH__OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
+  CONDUCTOR_AUTH__OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+  CONDUCTOR_AUTH__SESSION_SECRET_FILE: /run/secrets/session_secret
+  CONDUCTOR_AUTH__OPERATOR_GROUPS: ${OPERATOR_GROUPS:-[]}
+  CONDUCTOR_AUTH__DOMAIN_ADMIN_GROUPS: ${DOMAIN_ADMIN_GROUPS:-[]}
+  CONDUCTOR_LLM__BASE_URL: ${LLM_BASE_URL:?set LLM_BASE_URL}
+  CONDUCTOR_LLM__MODEL_ALIAS: ${LLM_MODEL_ALIAS:-deepseek-flash}
+  CONDUCTOR_LLM__API_KEY_FILE: /run/secrets/llm_api_key
+  CONDUCTOR_LLM__MAX_CONCURRENCY: "4"
+  CONDUCTOR_LLM__MAX_QUEUE: "32"
+  CONDUCTOR_FEATURES__CONSOLE_ENABLED: "true"
+  CONDUCTOR_CONSOLE__ALLOWED_HOSTS: ${CONSOLE_ALLOWED_HOSTS:-[]}
+  CONDUCTOR_CONSOLE__ALLOWED_PORTS: ${CONSOLE_ALLOWED_PORTS:-[443,8443]}
+  CONDUCTOR_KNOWLEDGE__EMBEDDING_BASE_URL: http://embeddings:8085
+  CONDUCTOR_KNOWLEDGE__EMBEDDING_MODEL: BGE-M3
+  CONDUCTOR_MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:?set MCP_PUBLIC_URL}
+  CONDUCTOR_MCP_SIGNING_KEY_FILE: /run/secrets/mcp_signing_key
+  CONDUCTOR_MCP_STORAGE_DIR: /data/mcp
+  CONDUCTOR_BRANDING_CONFIG_FILE: /run/branding/branding.json
+  CONDUCTOR_BRANDING_ASSETS_DIR: /run/branding/assets
+  CONDUCTOR_PORTAL_STATIC_DIR: /app/portal
+  CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
+
+x-secrets: &app-secrets
+  - internal_token
+  - vault_key
+  - session_secret
+  - oidc_client_secret
+  - mcp_signing_key
+  - llm_api_key
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    <<: *app
+    command: ["conductor-api"]
+    environment:
+      <<: *app-env
+    secrets: *app-secrets
+    volumes:
+      - ${CONDUCTOR_BRANDING_DIR:?set CONDUCTOR_BRANDING_DIR}:/run/branding:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      execution:
+        condition: service_started
+    ports:
+      - "${CONDUCTOR_BIND_ADDRESS:-127.0.0.1}:8080:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  execution:
+    <<: *app
+    command: ["conductor-execution"]
+    environment:
+      <<: *app-env
+      CONDUCTOR_FEATURES__GUEST_TASKS_ENABLED: ${GUEST_TASKS_ENABLED:-false}
+    secrets: *app-secrets
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${CONDUCTOR_BIND_ADDRESS:-127.0.0.1}:8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    <<: *app
+    command: ["conductor-worker"]
+    environment:
+      <<: *app-env
+    secrets: *app-secrets
+    depends_on:
+      db:
+        condition: service_healthy
+      execution:
+        condition: service_started
+
+  mcp:
+    <<: *app
+    command: ["conductor-mcp"]
+    environment:
+      <<: *app-env
+    secrets: *app-secrets
+    volumes:
+      - mcp_storage:/data/mcp
+    depends_on:
+      db:
+        condition: service_healthy
+      execution:
+        condition: service_started
+    ports:
+      - "${CONDUCTOR_BIND_ADDRESS:-127.0.0.1}:8083:8083"
+
+  embeddings:
+    image: ${CONDUCTOR_EMBEDDINGS_IMAGE:?set CONDUCTOR_EMBEDDINGS_IMAGE to the tested embeddings image}
+    pull_policy: never
+    restart: unless-stopped
+    command: ["conductor-embeddings"]
+    environment:
+      <<: *app-env
+      CONDUCTOR_KNOWLEDGE__EMBEDDING_API_KEY_FILE: /run/secrets/embedding_token
+      HF_HOME: /app/.cache/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /app/.cache/sentence-transformers
+    secrets:
+      - embedding_token
+    volumes:
+      - embedding_cache:/app/.cache
+    ports:
+      - "${CONDUCTOR_BIND_ADDRESS:-127.0.0.1}:8085:8085"
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:v0.13.0
+    profiles: ["chat"]
+    restart: unless-stopped
+    environment:
+      OPENAI_API_BASE_URL: ${LLM_BASE_URL:?set LLM_BASE_URL}
+      OPENAI_API_KEY: ${OPENWEBUI_API_KEY:?set OPENWEBUI_API_KEY}
+      WEBUI_URL: ${OPENWEBUI_PUBLIC_URL:?set OPENWEBUI_PUBLIC_URL}
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_SIGNUP: "false"
+      ENABLE_LOGIN_FORM: "false"
+      ENABLE_EMAIL_PASSWORD_APIS: "false"
+      OAUTH_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-Authentik}
+      OPENID_PROVIDER_URL: ${OIDC_ISSUER:?set OIDC_ISSUER}/.well-known/openid-configuration
+      OPENID_CLIENT_ID: ${OPENWEBUI_OIDC_CLIENT_ID:?set OPENWEBUI_OIDC_CLIENT_ID}
+      OPENID_CLIENT_SECRET: ${OPENWEBUI_OIDC_CLIENT_SECRET:?set OPENWEBUI_OIDC_CLIENT_SECRET}
+      DEFAULT_LOCALE: zh-CN
+    volumes:
+      - openwebui_data:/app/backend/data
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  pgdata:
+  mcp_storage:
+  embedding_cache:
+  openwebui_data:
+
+secrets:
+  internal_token:
+    file: ${CONDUCTOR_SECRETS_DIR:?set CONDUCTOR_SECRETS_DIR}/internal_token
+  vault_key:
+    file: ${CONDUCTOR_SECRETS_DIR}/vault_key
+  session_secret:
+    file: ${CONDUCTOR_SECRETS_DIR}/session_secret
+  oidc_client_secret:
+    file: ${CONDUCTOR_SECRETS_DIR}/oidc_client_secret
+  mcp_signing_key:
+    file: ${CONDUCTOR_SECRETS_DIR}/mcp_signing_key
+  llm_api_key:
+    file: ${CONDUCTOR_SECRETS_DIR}/llm_api_key
+  embedding_token:
+    file: ${CONDUCTOR_SECRETS_DIR}/embedding_token
+
+networks:
+  backend:
+    driver: bridge
+    internal: false

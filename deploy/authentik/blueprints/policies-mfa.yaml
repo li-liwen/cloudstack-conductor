@@ -1,0 +1,56 @@
+# Authentik blueprint: group-based MFA and operator policy (generic template).
+#
+# Review expressions against the Authentik version and the deployment's group
+# names before importing. This file contains no real group names, users, or
+# secrets.
+version: 1
+metadata:
+  name: conductor-mfa-policies
+  labels:
+    blueprints.goauthentik.io/description: MFA and role policies for CloudStack Conductor
+entries:
+  - model: authentik_policies_expression.expressionpolicy
+    id: conductor-operator-mfa
+    identifiers:
+      name: conductor-operator-mfa
+    attrs:
+      name: conductor-operator-mfa
+      expression: |
+        # Operators must present a second factor. Adjust the group name
+        # privately; this template uses a generic placeholder group.
+        if request.user.is_superuser:
+            return True
+        groups = {group.name for group in request.user.ak_groups.all()}
+        if "cloudstack-conductor-operators" not in groups:
+            return True
+        return bool(request.context.get("auth_method") == "mfa")
+  - model: authentik_policies_expression.expressionpolicy
+    id: conductor-legacy-mfa
+    identifiers:
+      name: conductor-legacy-mfa
+    attrs:
+      name: conductor-legacy-mfa
+      expression: |
+        # Users who had legacy CloudStack 2FA are marked with a private
+        # attribute by the identity-migration flow. They must enrol an
+        # Authentik factor before reaching CloudStack.
+        required = bool(request.user.attributes.get("conductor_legacy_mfa_required", False))
+        if not required:
+            return True
+        return bool(request.context.get("auth_method") == "mfa")
+  - model: authentik_policies_expression.expressionpolicy
+    id: conductor-domain-scope
+    identifiers:
+      name: conductor-domain-scope
+    attrs:
+      name: conductor-domain-scope
+      expression: |
+        # The identity bridge stores the exact CloudStack domain UUID on the
+        # mapping. A SAML application policy should compare the user's mapped
+        # domain with the application's domain binding. This placeholder fails
+        # closed unless the private binding is present.
+        expected = request.context.get("conductor_domain_id")
+        mapped = request.user.attributes.get("conductor_cloudstack_domain_id")
+        if not expected or not mapped:
+            return False
+        return str(expected) == str(mapped)

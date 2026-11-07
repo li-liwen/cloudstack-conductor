@@ -1,0 +1,168 @@
+# Synthetic demo stack. No real infrastructure, credentials, or prices.
+# Never use these values outside the disposable public demo.
+
+name: cloudstack-conductor-demo
+
+x-app-env: &app-env
+  CONDUCTOR_ENVIRONMENT: demo
+  CONDUCTOR_CLOUD_ID: demo-cloud
+  CONDUCTOR_PUBLIC_BASE_URL: http://localhost:8080
+  CONDUCTOR_API_BASE_URL: http://api:8000
+  CONDUCTOR_EXECUTION_BASE_URL: http://execution:8001
+  CONDUCTOR_DATABASE__URL: postgresql+asyncpg://conductor:demo-database-password@db:5432/conductor
+  CONDUCTOR_AUTH__MODE: demo
+  CONDUCTOR_AUTH__ALLOW_DEMO_AUTH: "true"
+  CONDUCTOR_AUTH__SECURE_COOKIES: "false"
+  CONDUCTOR_SESSION_SECRET: demo-session-signing-value-not-a-secret
+  CONDUCTOR_INTERNAL_TOKEN: demo-internal-service-token-not-a-secret
+  CONDUCTOR_VAULT_KEY: demo-vault-master-key-for-synthetic-demo-only
+  CONDUCTOR_LLM__BASE_URL: http://mock-llm:8080/v1
+  CONDUCTOR_LLM__MODEL_ALIAS: deepseek-flash
+  CONDUCTOR_LLM__MOCK: "true"
+  CONDUCTOR_KNOWLEDGE__MOCK_EMBEDDINGS: "true"
+  CONDUCTOR_KNOWLEDGE__SOURCE_DIR: demo/knowledge
+  CONDUCTOR_FEATURES__CONSOLE_ENABLED: "false"
+  CONDUCTOR_FEATURES__MCP_ENABLED: "false"
+  CONDUCTOR_FEATURES__GUEST_TASKS_ENABLED: "false"
+  CONDUCTOR_FEATURES__USAGE_COLLECTOR_ENABLED: "false"
+  CONDUCTOR_LOG_LEVEL: INFO
+  CONDUCTOR_DOCS_ENABLED: "true"
+  CONDUCTOR_PORTAL_STATIC_DIR: /app/portal
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: conductor
+      POSTGRES_PASSWORD: demo-database-password
+      POSTGRES_DB: conductor
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conductor -d conductor"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mock-cloudstack:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: cloudstack-conductor-demo:local
+    command: ["python", "-m", "demo.mock_cloudstack.app"]
+    environment:
+      DEMO_API_KEY: demo-api-key
+      DEMO_API_SECRET: demo-api-secret
+      DEMO_VERIFY_SIGNATURE: "true"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mock-llm:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: cloudstack-conductor-demo:local
+    command: ["python", "-m", "demo.mock_llm.app"]
+    environment:
+      DEMO_MODEL_ALIAS: deepseek-flash
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  init:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: cloudstack-conductor-demo:local
+    command:
+      - /bin/sh
+      - -c
+      - "alembic upgrade head && python -m demo.seed"
+    environment:
+      <<: *app-env
+      DEMO_CLOUDSTACK_API_URL: http://mock-cloudstack:8080/client/api
+      DEMO_API_KEY: demo-api-key
+      DEMO_API_SECRET: demo-api-secret
+      DEMO_KNOWLEDGE_DIR: demo/knowledge
+    depends_on:
+      db:
+        condition: service_healthy
+      mock-cloudstack:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: cloudstack-conductor-demo:local
+    command: ["conductor-api"]
+    environment:
+      <<: *app-env
+      CONDUCTOR_BIND_PORT: "8000"
+    ports:
+      - "8080:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+      execution:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  execution:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: cloudstack-conductor-demo:local
+    command: ["conductor-execution"]
+    environment:
+      <<: *app-env
+      CONDUCTOR_BIND_PORT: "8001"
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+      mock-cloudstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: cloudstack-conductor-demo:local
+    command: ["conductor-worker"]
+    environment:
+      <<: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+      execution:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

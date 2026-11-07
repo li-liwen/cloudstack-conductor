@@ -1,0 +1,14 @@
+title = "CloudStack Conductor public repository"
+description = "Gitleaks default secret rules plus a narrow allowlist for obvious synthetic demo values. Infrastructure and business-data checks live in tools/privacy/scan.py."
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Explicitly synthetic values used by the public demo and its tests"
+regexes = [
+  '''(?i)synthetic-(?:provisioner|vault|session|internal|api|token|key|secret)[A-Za-z0-9._-]*''',
+  '''(?i)demo-(?:api|vault|session|internal|database|model|user|operator)[A-Za-z0-9._-]*''',
+  '''(?i)replace-with-[A-Za-z0-9._-]+''',
+  '''\$\{[A-Z0-9_]+\}''',
+]

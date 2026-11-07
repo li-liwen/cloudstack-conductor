@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Pre-commit: scan the staged index before anything can be committed.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+PYTHON="${PYTHON:-python3}"
+DENYLIST="${CONDUCTOR_PRIVATE_DENYLIST:-$ROOT/../private/privacy-denylist.txt}"
+GITLEAKS="${GITLEAKS_BIN:-$(command -v gitleaks || true)}"
+if [[ -z "$GITLEAKS" && -x "$ROOT/../private/tools/gitleaks" ]]; then
+  GITLEAKS="$ROOT/../private/tools/gitleaks"
+fi
+
+"$PYTHON" tools/privacy/scan.py \
+  --root "$ROOT" --scope staged --denylist "$DENYLIST" --require-denylist
+
+if [[ -z "$GITLEAKS" ]]; then
+  echo "BLOCKED: Gitleaks is not installed; install it with tools/privacy/install_gitleaks.sh" >&2
+  exit 1
+fi
+"$GITLEAKS" git --staged --redact --no-banner --config "$ROOT/.gitleaks.toml" "$ROOT"
