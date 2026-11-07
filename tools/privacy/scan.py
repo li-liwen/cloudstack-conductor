@@ -311,6 +311,13 @@ def scan_text(text: str, path: str, denylist: Iterable[str]) -> list[Finding]:
         candidate = match.group(0)
         if candidate.lower().endswith(("example.com", "example.org", "example.net")):
             continue
+        # Minified JavaScript uses property chains such as ``this.internal``;
+        # these are code identifiers, not deployment hostnames.
+        prefix = candidate.split(".", 1)[0].lower()
+        if prefix in {"this", "self", "window", "document", "module", "exports", "globalthis"}:
+            continue
+        if len(prefix) == 1 and prefix.isalpha():
+            continue
         line, column = line_col(match.start())
         add("internal_hostname", line, column, candidate)
 

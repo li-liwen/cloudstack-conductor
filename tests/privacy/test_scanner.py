@@ -146,3 +146,12 @@ def test_clean_repository_passes(tmp_path: Path) -> None:
     (repo / "README.md").write_text("# Example\n\nUses example.com and 192.0.2.1.\n", encoding="utf-8")
     result = _run(["--root", str(repo), "--scope", "tree"])
     assert result.returncode == 0, result.stdout
+
+
+def test_javascript_internal_property_is_not_a_hostname(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    (repo / "bundle.js").write_text(
+        "const state = this.internal; const value = t.internal;\n", encoding="utf-8"
+    )
+    result = _run(["--root", str(repo), "--scope", "tree"])
+    assert result.returncode == 0, result.stdout
