@@ -341,12 +341,19 @@ class AgentRunner:
             ]
             if len(matches) == 1:
                 return matches[0]
+        if not hint and parsed.text:
+            text = parsed.text.lower()
+            matches = [
+                item for item in offerings if str(item.get("name", "")).strip() and str(item["name"]).lower() in text
+            ]
+            if len(matches) == 1:
+                return matches[0]
         if parsed.cpu_hint and parsed.memory_hint:
             matches = [
                 item
                 for item in offerings
                 if int(item.get("cpu_count", 0)) == parsed.cpu_hint
-                and int(Decimal(str(item.get("memory_gib", "0")))) == parsed.memory_hint
+                and Decimal(str(item.get("memory_gib", "0"))) == parsed.memory_hint
             ]
             if len(matches) == 1:
                 return matches[0]

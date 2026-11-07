@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from conductor.models.enums import ActionType
 
@@ -34,7 +35,7 @@ _GUEST = ("ansible", "安装 nginx", "安装nginx", "docker", "文件系统", "f
 _CLARIFY = ("?", "？")
 
 _NUMBER_CPU = re.compile(r"(\d+)\s*(?:vcpu|cpu|core|核|c(?=\d|\s|$))", re.IGNORECASE)
-_NUMBER_MEM = re.compile(r"(\d+)\s*(?:g(?:b)?\b|gb|gib|g内存|内存)", re.IGNORECASE)
+_NUMBER_MEM = re.compile(r"(\d+(?:\.\d+)?)\s*(?:g(?:b)?\b|gb|gib|g内存|内存)", re.IGNORECASE)
 _NUMBER_GB = re.compile(r"(\d+)\s*(?:g(?:b)?\b|gib)", re.IGNORECASE)
 _QUOTED = re.compile(r"[\"'“”‘’]([^\"'“”‘’]{1,100})[\"'“”‘’]")
 
@@ -48,7 +49,7 @@ class ParsedIntent:
     name_hint: str | None = None
     offering_hint: str | None = None
     cpu_hint: int | None = None
-    memory_hint: int | None = None
+    memory_hint: Decimal | None = None
     size_gb: int | None = None
     target_hint: str | None = None
     query: str | None = None
@@ -64,9 +65,9 @@ def parse(text: str, *, default_locale: str = "zh-CN") -> ParsedIntent:
     language = detect_language(text) if text.strip() else default_locale
     lowered = text.lower()
     quoted = _QUOTED.findall(text)
-    name_hint = quoted[0].strip() if quoted else None
+    name_hint = quoted[0].strip() if quoted else _name_phrase(text)
     cpu_hint = _first_int(_NUMBER_CPU, text)
-    memory_hint = _first_int(_NUMBER_MEM, text)
+    memory_hint = _first_decimal(_NUMBER_MEM, text)
     size_gb = _first_int(_NUMBER_GB, text) if any(word in lowered for word in _VOLUME) else None
 
     if any(word in lowered for word in _DOCS) and any(
@@ -190,12 +191,28 @@ def _first_int(pattern: re.Pattern[str], text: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _first_decimal(pattern: re.Pattern[str], text: str) -> Decimal | None:
+    match = pattern.search(text)
+    return Decimal(match.group(1)) if match else None
+
+
+def _name_phrase(text: str) -> str | None:
+    match = re.search(
+        r"(?:名称|名字|命名为|name(?:d)?)\s*(?:为|是|:)?\s*[\"'“”]?([A-Za-z0-9][A-Za-z0-9._-]{0,62})",
+        text,
+        re.IGNORECASE,
+    )
+    return match.group(1) if match else None
+
+
 def _offering_phrase(text: str) -> str | None:
     quoted = _QUOTED.findall(text)
     if quoted:
         return quoted[0]
-    match = re.search(r"(?:规格|套餐|offering|配置)\s*(?:为|是|:)?\s*([A-Za-z0-9._-]{2,60})", text, re.IGNORECASE)
-    return match.group(1) if match else None
+    match = re.search(
+        r"(?:规格|套餐|offering|配置)\s*(?:为|是|:)?\s*([A-Za-z0-9][A-Za-z0-9._ -]{1,59})", text, re.IGNORECASE
+    )
+    return match.group(1).strip() if match else None
 
 
 def _optional_str(value: object) -> str | None:

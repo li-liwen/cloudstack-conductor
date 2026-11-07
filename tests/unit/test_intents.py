@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from conductor.agent.intents import parse, parse_with_model
 from conductor.models.enums import ActionType
 
@@ -67,3 +69,15 @@ def test_model_hints_are_names_not_ids() -> None:
     assert refined.name_hint == "11111111-1111-4111-8111-111111111111"
     # The runner treats this as a name hint and resolves it against the caller's
     # resources; no model-supplied identifier is used directly.
+
+
+def test_fractional_memory_and_offering_name_are_parsed() -> None:
+    parsed = parse("创建一台 1C0.5G 的云主机", default_locale="zh-CN")
+    assert parsed.cpu_hint == 1
+    assert parsed.memory_hint == Decimal("0.5")
+    parsed = parse(
+        "创建一台规格为 Small Instance 的云主机，名称 pilot-created",
+        default_locale="zh-CN",
+    )
+    assert parsed.offering_hint == "Small Instance"
+    assert parsed.name_hint == "pilot-created"
