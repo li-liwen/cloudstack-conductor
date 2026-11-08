@@ -200,7 +200,7 @@ class KnowledgeSettings(BaseModel):
     source_dir: str | None = None
     embedding_base_url: str | None = None
     embedding_api_key_file: str | None = None
-    embedding_model: str = "BGE-M3"
+    embedding_model: str = "BAAI/bge-m3"
     embedding_dimension: int = 1024
     chunk_tokens: int = 750
     overlap_tokens: int = 100

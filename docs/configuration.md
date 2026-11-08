@@ -83,7 +83,7 @@ wildcard.
 | Variable | Meaning |
 |---|---|
 | `CONDUCTOR_KNOWLEDGE__EMBEDDING_BASE_URL` | Local embedding service URL |
-| `CONDUCTOR_KNOWLEDGE__EMBEDDING_MODEL` | `BGE-M3` by default |
+| `CONDUCTOR_KNOWLEDGE__EMBEDDING_MODEL` | `BAAI/bge-m3` by default (local path or HF repo) |
 | `CONDUCTOR_KNOWLEDGE__CHUNK_TOKENS` | 300–2000, default 750 |
 | `CONDUCTOR_KNOWLEDGE__OVERLAP_TOKENS` | Overlap, default 100 |
 | `CONDUCTOR_KNOWLEDGE__TOP_K` | Final evidence chunks, default 8 |

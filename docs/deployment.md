@@ -110,7 +110,7 @@ Approximate RAM for the full stack (the demo needs far less):
 | Authentik | 2 GiB |
 | API/workers/execution/identity/MCP | 3 GiB |
 | Open WebUI | 1.5 GiB |
-| Embeddings (BGE-M3) | 3 GiB |
+| Embeddings (BAAI/bge-m3) | 3 GiB |
 | Edge/console/monitoring | 1.5 GiB |
 | OS/headroom | ~3 GiB |
 
