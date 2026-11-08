@@ -66,11 +66,17 @@ curl -sS 'http://CLOUDSTACK/client/api/?command=listIdps&response=json'
 
 An HTTP 401 with "command ... does not exist, is not available for user" in
 the management log means the authenticator plugin is not registered, not that
-the IdP is misconfigured. Install the matching version of
-`cloud-plugin-user-authenticator-saml2`, restart management, then configure
-`saml2.enabled` and the IdP metadata. Do not enable global SAML on a production
-management server until the plugin and metadata fetch are verified on a
-canary.
+the IdP is misconfigured. Install/verify the SAML authenticator, configure
+`saml2.enabled` and the IdP metadata, and then **restart the management
+server**. SAML login commands and IdP metadata are registered at startup; a
+dynamic `updateConfiguration` alone leaves `listIdps` unavailable. Do not
+enable global SAML on a production management server until the plugin,
+metadata fetch, restart, and `listIdps` response are verified on a canary.
+
+When the CloudStack ACS URL contains a query string
+(`/client/api?command=samlSso`), use HTTP-POST binding at the IdP. A redirect
+binding appends a second `?SAMLResponse=...` and CloudStack will not parse the
+request.
 
 ### Blueprints
 
