@@ -52,6 +52,26 @@ A domain administrator operates as their own identity and uses CloudStack's
 existing descendant permissions. Do not impersonate a similarly named user in
 a child domain.
 
+### Management-server plugin
+
+`saml2.*` configuration alone is not enough. The CloudStack SAML2 user
+authenticator plugin must be installed on every management server and the
+service restarted. Some packages ship the plugin separately or omit it. Verify
+the plugin before changing global SAML settings:
+
+```bash
+# The command should be discoverable after the plugin is loaded.
+curl -sS 'http://CLOUDSTACK/client/api/?command=listIdps&response=json'
+```
+
+An HTTP 401 with "command ... does not exist, is not available for user" in
+the management log means the authenticator plugin is not registered, not that
+the IdP is misconfigured. Install the matching version of
+`cloud-plugin-user-authenticator-saml2`, restart management, then configure
+`saml2.enabled` and the IdP metadata. Do not enable global SAML on a production
+management server until the plugin and metadata fetch are verified on a
+canary.
+
 ### Blueprints
 
 `deploy/authentik/blueprints/` contains generic, version-controlled templates:
