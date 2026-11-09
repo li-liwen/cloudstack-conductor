@@ -111,3 +111,37 @@ def test_security_headers(client: TestClient) -> None:
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert "default-src 'self'" in response.headers["Content-Security-Policy"]
     assert response.headers["X-Frame-Options"] == "DENY"
+
+
+def test_identity_router_is_not_shadowed_by_spa(monkeypatch) -> None:
+    """The portal catch-all must be mounted after startup-added routers."""
+
+    if not DATABASE_URL:
+        pytest.skip("CONDUCTOR_TEST_DATABASE_URL is not set")
+    monkeypatch.setenv("CONDUCTOR_IDENTITY__ENABLED", "true")
+    monkeypatch.setenv("CONDUCTOR_SESSION_SECRET", "integration-session-signing-value")
+    monkeypatch.setenv("CONDUCTOR_INTERNAL_TOKEN", "integration-internal-service-token")
+
+    class _FakeIdentityService:
+        require_tls = False
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "conductor.api.app.build_identity_service",
+        lambda *args, **kwargs: _FakeIdentityService(),
+    )
+    settings = Settings(
+        environment="demo",
+        cloud_id="demo-cloud",
+        public_base_url="http://testserver",
+        database={"url": DATABASE_URL},
+        auth={"mode": "demo", "allow_demo_auth": True, "secure_cookies": False, "session_secret_file": None},
+        features={"console_enabled": False, "mcp_enabled": False},
+        knowledge={"mock_embeddings": True},
+    )
+    app = create_app(settings)
+    with TestClient(app) as test_client:
+        response = test_client.get("/api/v1/identity/migration")
+    assert response.status_code == 401, response.text
