@@ -341,6 +341,41 @@ def run(args: argparse.Namespace) -> int:
         return check_only(public_ci=args.public_ci)
     if args.public_ci:
         raise GateError("--public-ci is only valid with --check-only; it cannot publish")
+    if args.commit:
+        if args.push:
+            raise GateError("--commit is an audit mode and cannot push")
+        repository_root()
+        remote_url = verify_origin(args.remote)
+        denylist = os.environ.get("CONDUCTOR_PRIVATE_DENYLIST") or str(ROOT.parent / "private" / "privacy-denylist.txt")
+        os.environ["CONDUCTOR_PRIVATE_DENYLIST"] = denylist
+        commit = git("rev-parse", "--verify", f"{args.commit}^{{commit}}").stdout.strip()
+        run_privacy_scan(["tree", "history"], require_denylist=True)
+        manifest_dir = Path(args.manifest_dir)
+        run_gitleaks(staged=False, report_dir=manifest_dir)
+        identity = verify_identity()
+        with tempfile.TemporaryDirectory(prefix="conductor-publication-") as temporary:
+            export = Path(args.export_dir) if args.export_dir else Path(temporary) / "export"
+            export_commit(commit, export)
+            scan_tree(export, load_denylist(denylist)[0])
+            tests = build_and_test(export, skip_tests=args.skip_tests, skip_portal=args.skip_portal)
+            scan_tree(export, load_denylist(denylist)[0])
+            artefacts = artefact_hashes(export)
+            gitleaks_version = subprocess.run(
+                [gitleaks_path(), "version"], capture_output=True, text=True
+            ).stdout.strip()
+            manifest = write_manifest(
+                manifest_dir=manifest_dir,
+                commit=commit,
+                branch=args.branch,
+                remote=remote_url,
+                identity=identity,
+                tests=tests,
+                artefacts=artefacts,
+                gitleaks_version=gitleaks_version,
+            )
+        print(f"audited {commit}")
+        print(f"publication manifest: {manifest}")
+        return 0
     if not args.message:
         raise GateError("--message is required when committing")
     if args.skip_tests and args.push:
@@ -399,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--push", action="store_true")
     parser.add_argument("--manifest-dir", default=str(DEFAULT_MANIFEST_DIR))
     parser.add_argument("--export-dir", help="keep the clean export at this path (must be outside the repo)")
+    parser.add_argument("--commit", help="audit an existing commit without staging or pushing")
     parser.add_argument("--skip-tests", action="store_true", help="not permitted for a real publication")
     parser.add_argument("--skip-portal", action="store_true")
     args = parser.parse_args(argv)
