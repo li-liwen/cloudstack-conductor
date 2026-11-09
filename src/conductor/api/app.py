@@ -105,6 +105,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             )
             app.state.identity = identity_service
+        # Mount the SPA last so its catch-all does not shadow routers added
+        # during startup (notably the identity-migration router).
+        if not getattr(app.state, "frontend_mounted", False):
+            _mount_frontend(app, settings)
+            app.state.frontend_mounted = True
         try:
             yield
         finally:
@@ -210,7 +215,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(resources.router)
     app.include_router(operator.router)
 
-    _mount_frontend(app, settings)
     return app
 
 
