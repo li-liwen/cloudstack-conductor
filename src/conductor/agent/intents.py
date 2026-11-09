@@ -14,7 +14,20 @@ from decimal import Decimal
 
 from conductor.models.enums import ActionType
 
-_CREATE = ("创建", "新建", "开通", "部署", "create", "deploy", "provision", "launch")
+_CREATE = (
+    "创建",
+    "新建",
+    "开通",
+    "部署",
+    "开一台",
+    "开个",
+    "建一台",
+    "建个",
+    "create",
+    "deploy",
+    "provision",
+    "launch",
+)
 _DELETE = ("删除", "销毁", "delete", "destroy", "remove")
 _START = ("启动", "开机", "start", "power on")
 _STOP = ("停止", "关机", "stop", "shut down", "shutdown")

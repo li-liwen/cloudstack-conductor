@@ -14,6 +14,13 @@ def test_chinese_create_with_shape() -> None:
     assert intent.language == "zh-CN"
 
 
+def test_colloquial_chinese_create() -> None:
+    assert parse("帮我开一台 demo.small").action is ActionType.CREATE_INSTANCE
+    assert parse("建一台 demo.small 云主机").action is ActionType.CREATE_INSTANCE
+    # Power-on wording remains a start intent.
+    assert parse("开机 demo-web").action is ActionType.START_INSTANCE
+
+
 def test_english_create_with_name() -> None:
     intent = parse('create an instance called "demo-app" with 4 vCPU and 8 GB')
     assert intent.action is ActionType.CREATE_INSTANCE
