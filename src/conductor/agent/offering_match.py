@@ -81,9 +81,7 @@ def _decimal(value: Decimal) -> str:
     return text.rstrip("0").rstrip(".") if "." in text else text
 
 
-def _score(
-    offering: dict[str, Any], cpu: int | None, memory: Decimal | None
-) -> tuple[float, int, int, Decimal, str]:
+def _score(offering: dict[str, Any], cpu: int | None, memory: Decimal | None) -> tuple[float, int, int, Decimal, str]:
     actual_cpu = int(offering.get("cpu_count") or 0)
     try:
         actual_memory = Decimal(str(offering.get("memory_gib") or "0"))
