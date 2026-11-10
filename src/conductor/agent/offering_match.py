@@ -81,7 +81,9 @@ def _decimal(value: Decimal) -> str:
     return text.rstrip("0").rstrip(".") if "." in text else text
 
 
-def _score(offering: dict[str, Any], cpu: int | None, memory: Decimal | None) -> tuple[float, int, Decimal, str]:
+def _score(
+    offering: dict[str, Any], cpu: int | None, memory: Decimal | None
+) -> tuple[float, int, int, Decimal, str]:
     actual_cpu = int(offering.get("cpu_count") or 0)
     try:
         actual_memory = Decimal(str(offering.get("memory_gib") or "0"))
@@ -92,8 +94,10 @@ def _score(offering: dict[str, Any], cpu: int | None, memory: Decimal | None) ->
         score += abs(actual_cpu - cpu) / max(cpu, 1)
     if memory is not None and memory > 0:
         score += float(abs(actual_memory - memory)) / float(memory)
-    # Prefer the smaller offering when scores tie, then a stable name order.
-    return (score, actual_cpu, actual_memory, str(offering.get("name") or ""))
+    # On a tie prefer a shape that does not under-provision; then prefer the
+    # smaller shape and a stable name order.
+    meets = (cpu is None or actual_cpu >= cpu) and (memory is None or actual_memory >= memory)
+    return (score, 0 if meets else 1, actual_cpu, actual_memory, str(offering.get("name") or ""))
 
 
 def select_offering(

@@ -55,3 +55,10 @@ def test_single_offering_is_a_safe_default() -> None:
     match = select_offering([OFFERINGS[0]])
     assert match is not None
     assert match.offering["name"] == "Small Instance"
+
+
+def test_tie_prefers_a_shape_that_meets_the_request() -> None:
+    match = select_offering(OFFERINGS, cpu=3, memory=Decimal("6"))
+    assert match is not None
+    assert match.offering["name"] == "c3.medium"
+    assert match.satisfies
