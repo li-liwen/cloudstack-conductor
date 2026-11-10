@@ -94,3 +94,10 @@ def test_resource_phrase_supplies_instance_name() -> None:
     parsed = parse("删除云主机 agent-created", default_locale="zh-CN")
     assert parsed.action is ActionType.DELETE_INSTANCE
     assert parsed.name_hint == "agent-created"
+
+
+def test_compact_cpu_memory_shape_is_parsed() -> None:
+    parsed = parse("帮我创建一个2c4g的云服务器")
+    assert parsed.action.value == "create_instance"
+    assert parsed.cpu_hint == 2
+    assert parsed.memory_hint == Decimal("4")

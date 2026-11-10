@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import secrets
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -17,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from conductor.agent.graph import _from_dict, build_intent_graph
 from conductor.agent.intents import ParsedIntent
 from conductor.agent.llm import ModelGateway
+from conductor.agent.offering_match import OfferingMatch, select_offering
 from conductor.config import Settings
 from conductor.db.conversations import ConversationRepository
 from conductor.execution.client import ExecutionClient
@@ -199,12 +199,25 @@ class AgentRunner:
         quote = plan.get("quote") or {}
         approval_url = f"/plans/{plan['plan_id']}"
         explanation_zh = str(plan.get("explanation_zh") or plan["action"]).rstrip("。.!！ ")
-        summary = (
-            f"已生成计划：{explanation_zh}。审批后才会执行，审批在 10 分钟内有效。"
-            if locale != "en"
-            else f"A plan was prepared: {str(plan.get('explanation_en') or plan['action']).rstrip('.')}. "
-            "Nothing runs until you approve it; approval is valid for 10 minutes."
-        )
+        match_note = ""
+        if parsed.action is ActionType.CREATE_INSTANCE:
+            selected = next(
+                (item for item in items.get("offerings", []) if item.get("id") == plan_params.get("offering_id")),
+                None,
+            )
+            if selected is not None:
+                match = self._offering_match([selected], parsed)
+                if match is not None:
+                    match_note = match.describe(locale=locale)
+        prefix = match_note + "\n" if match_note else ""
+        if locale != "en":
+            summary = f"{prefix}已生成计划：{explanation_zh}。审批后才会执行，审批在 10 分钟内有效。"
+        else:
+            explanation_en = str(plan.get("explanation_en") or plan["action"]).rstrip(".")
+            summary = (
+                f"{prefix}A plan was prepared: {explanation_en}. "
+                "Nothing runs until you approve it; approval is valid for 10 minutes."
+            )
         await self._assistant(
             session,
             conversations,
@@ -332,34 +345,23 @@ class AgentRunner:
         return {}, ["unsupported"]
 
     def _pick_offering(self, offerings: list[dict], parsed: ParsedIntent) -> dict | None:
-        hint = (parsed.offering_hint or "").strip().lower()
-        if hint:
-            matches = [
-                item
-                for item in offerings
-                if hint == str(item.get("id", "")).lower() or hint in str(item.get("name", "")).lower()
-            ]
-            if len(matches) == 1:
-                return matches[0]
-        if not hint and parsed.text:
-            text = parsed.text.lower()
-            matches = [
-                item for item in offerings if str(item.get("name", "")).strip() and str(item["name"]).lower() in text
-            ]
-            if len(matches) == 1:
-                return matches[0]
-        if parsed.cpu_hint and parsed.memory_hint:
-            matches = [
-                item
-                for item in offerings
-                if int(item.get("cpu_count", 0)) == parsed.cpu_hint
-                and Decimal(str(item.get("memory_gib", "0"))) == parsed.memory_hint
-            ]
-            if len(matches) == 1:
-                return matches[0]
-        if len(offerings) == 1:
-            return offerings[0]
-        return None
+        match = select_offering(
+            offerings,
+            hint=parsed.offering_hint,
+            text=parsed.text,
+            cpu=parsed.cpu_hint,
+            memory=parsed.memory_hint,
+        )
+        return match.offering if match is not None else None
+
+    def _offering_match(self, offerings: list[dict], parsed: ParsedIntent) -> OfferingMatch | None:
+        return select_offering(
+            offerings,
+            hint=parsed.offering_hint,
+            text=parsed.text,
+            cpu=parsed.cpu_hint,
+            memory=parsed.memory_hint,
+        )
 
     @staticmethod
     def _pick_named(candidates: list[dict], hint: str | None) -> dict | None:

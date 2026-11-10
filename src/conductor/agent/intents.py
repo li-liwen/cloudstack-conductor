@@ -48,8 +48,8 @@ _GUEST = ("ansible", "安装 nginx", "安装nginx", "docker", "文件系统", "f
 _CLARIFY = ("?", "？")
 
 _NUMBER_CPU = re.compile(r"(\d+)\s*(?:vcpu|cpu|core|核|c(?=\d|\s|$))", re.IGNORECASE)
-_NUMBER_MEM = re.compile(r"(\d+(?:\.\d+)?)\s*(?:g(?:b)?\b|gb|gib|g内存|内存)", re.IGNORECASE)
-_NUMBER_GB = re.compile(r"(\d+)\s*(?:g(?:b)?\b|gib)", re.IGNORECASE)
+_NUMBER_MEM = re.compile(r"(\d+(?:\.\d+)?)\s*(?:g(?:b|ib)?(?![a-z])|g内存|内存)", re.IGNORECASE)
+_NUMBER_GB = re.compile(r"(\d+)\s*(?:g(?:b|ib)?(?![a-z]))", re.IGNORECASE)
 _QUOTED = re.compile(r"[\"'“”‘’]([^\"'“”‘’]{1,100})[\"'“”‘’]")
 
 
