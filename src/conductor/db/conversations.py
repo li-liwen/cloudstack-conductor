@@ -189,6 +189,16 @@ class ConversationRepository:
         row = result.scalar_one_or_none()
         return _run(row) if row else None
 
+    async def get_run_by_plan(self, plan_id: str, principal_subject: str) -> Run | None:
+        result = await self.session.execute(
+            select(RunRow)
+            .where(RunRow.plan_id == plan_id, RunRow.principal_subject == principal_subject)
+            .order_by(RunRow.created_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return _run(row) if row else None
+
     async def update_run(
         self,
         run_id: str,

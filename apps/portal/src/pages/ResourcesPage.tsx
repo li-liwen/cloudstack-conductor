@@ -31,6 +31,15 @@ import { safeSameOriginPath } from "../lib/safe";
 const TAB_IDS = ["instances", "volumes", "networks", "offerings", "templates"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
+// The API accepts singular resource kinds; the tab ids are plural for URLs.
+const RESOURCE_KIND: Record<TabId, string> = {
+  instances: "instance",
+  volumes: "volume",
+  networks: "network",
+  offerings: "offering",
+  templates: "template",
+};
+
 function isTabId(value: string | null): value is TabId {
   return Boolean(value && (TAB_IDS as readonly string[]).includes(value));
 }
@@ -342,7 +351,7 @@ export function ResourcesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const param = searchParams.get("tab");
   const activeTab: TabId = isTabId(param) ? param : "instances";
-  const query = useApiQuery((signal) => api.getResources(activeTab, signal), [activeTab]);
+  const query = useApiQuery((signal) => api.getResources(RESOURCE_KIND[activeTab], signal), [activeTab]);
   const [selectedInstance, setSelectedInstance] = useState<InstanceResource | null>(null);
 
   const tabs = [

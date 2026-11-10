@@ -14,6 +14,9 @@ from conductor.api.deps import (
     require_csrf,
     services,
 )
+from conductor.db.conversations import ConversationRepository
+from conductor.models.conversation import MessagePart
+from conductor.models.enums import RunState
 from conductor.models.plan import ApprovalRequest
 from conductor.models.pricing import PriceQuote
 from conductor.pricing.estimates import quote_summary
@@ -85,6 +88,45 @@ async def approve_plan(
         note=body.note,
         client_fingerprint=_fingerprint(context),
     )
+    operation = result.get("operation") if isinstance(result, dict) else None
+    operation_id = operation.get("operation_id") if isinstance(operation, dict) else None
+    operation_state = operation.get("state") if isinstance(operation, dict) else None
+    if operation_id:
+        async with services_bundle.session_factory() as db:
+            conversations = ConversationRepository(db)
+            run = await conversations.get_run_by_plan(plan_id, context.principal.subject)
+            if run is not None and run.state is RunState.AWAITING_APPROVAL:
+                message = await conversations.add_message(
+                    conversation_id=run.conversation_id,
+                    role="assistant",
+                    parts=[
+                        MessagePart(
+                            type="text",
+                            text=(
+                                "计划已批准，操作已进入执行队列；请在“操作记录”查看结果。\n"
+                                "The plan was approved and the operation was queued; "
+                                "see Operations for the result."
+                            ),
+                        ),
+                        MessagePart(
+                            type="operation",
+                            data={
+                                "operation_id": operation_id,
+                                "plan_id": plan_id,
+                                "state": operation_state,
+                            },
+                        ),
+                    ],
+                    run_id=run.run_id,
+                )
+                await conversations.update_run(
+                    run.run_id,
+                    state=RunState.COMPLETED,
+                    operation_id=operation_id,
+                    assistant_message_id=message.message_id,
+                )
+                await conversations.add_event(run.run_id, "approved", {"operation_id": operation_id})
+                await db.commit()
     return result
 
 
