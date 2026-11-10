@@ -73,17 +73,19 @@ function extractAppendText(content: unknown): string {
 function threadMessageFrom(message: MessageDto): ThreadMessageLike {
   const text = messageText(message);
   const createdAt = new Date(message.created_at);
+  const role =
+    message.role === "user"
+      ? "user"
+      : message.role === "system"
+        ? "system"
+        : "assistant";
   return {
     id: message.message_id,
-    role:
-      message.role === "user"
-        ? "user"
-        : message.role === "system"
-          ? "system"
-          : "assistant",
+    role,
     content: text ? [{ type: "text" as const, text }] : [],
     createdAt: Number.isNaN(createdAt.getTime()) ? undefined : createdAt,
-    status: { type: "complete", reason: "stop" },
+    // assistant-ui rejects a status field on user/system messages.
+    ...(role === "assistant" ? { status: { type: "complete" as const, reason: "stop" as const } } : {}),
     metadata: {
       custom: {
         parts: message.parts,
