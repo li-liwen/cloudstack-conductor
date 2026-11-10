@@ -103,7 +103,6 @@ def test_compact_cpu_memory_shape_is_parsed() -> None:
     assert parsed.memory_hint == Decimal("4")
 
 
-
 def test_colloquial_want_shape_is_parsed() -> None:
     parsed = parse("我想要一台2c4g的服务器")
     assert parsed.action.value == "create_instance"
